@@ -7,6 +7,7 @@ export default function simulate(state, inputs) {
 	for (const id of Object.keys(newState.players)) {
 		const player = newState.players[id];
 		const input = inputs.players[id];
+		if (!player || !input) continue;
 		if (input.up) {
 			player.yv -= accel * delta * input.up;
 		}

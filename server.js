@@ -2,6 +2,7 @@ import simulate from './simulate.js';
 
 window.bufferSize = 13;
 window.tickRate = 20;
+window.ping = false;
 
 export default class Server {
 	constructor(state, inputs) {
@@ -16,6 +17,10 @@ export default class Server {
 		this.updated = false;
 		this.inputPackages = [];
 		this.startSending();
+		this.pingClients();
+	}
+	pingClients() {
+		window.ping = true;
 	}
 	receiveInputs(packages) {
 		setTimeout(() => {

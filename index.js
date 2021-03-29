@@ -1,15 +1,18 @@
 window.simulation_rate = 60;
-window.minRrt = 50;
-window.rrt = 50;
-window.jitter = 25;
+window.minRrt = 100;
+window.rrt = 100;
+window.jitter = 100;
 window.otherBufferSize = 16;
+window.tickOffset = null;
+window.canOtherUpdate = false;
+window.otherStartTime = null;
 
 // window.inputDecay = 0.99;
 
-window.clientReceiveLocal = function(pack) {
+window.clientReceiveLocal = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick;
+	const serverTick = pack.tick + tickOffset;
 
 	const roundedState = copy(states[serverTick]);
 	for (const key of Object.keys(roundedState.players)) {
@@ -18,22 +21,22 @@ window.clientReceiveLocal = function(pack) {
 	}
 
 	if (!isSameStates(serverState, roundedState)) {
-		
+
 		console.log('correction happened', serverTick, 'compare', serverState, roundedState);
 		states[serverTick] = serverState;
 		inputs[serverTick] = serverInput;
 		let currentTick = serverTick - 1;
 		while (currentTick < tick) {
 			currentTick++;
-			states[currentTick] = simulate(copy(states[currentTick - 1]), 
+			states[currentTick] = simulate(copy(states[currentTick - 1]),
 				inputs[currentTick]);
 		}
 	}
 }
-window.otherReceive = function(pack) {
+window.otherReceive = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick;
+	const serverTick = pack.tick + tickOffset;
 
 	if (!otherStates[serverTick + otherBufferSize]) {
 		// otherStates[serverTick + otherBufferSize] = serverState;
@@ -59,7 +62,7 @@ window.otherReceive = function(pack) {
 			otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
 		}
 	}
-	
+
 	// let currentTick = serverTick;
 	// while (currentTick < otherTick) {
 	// 	currentTick++;
@@ -69,9 +72,13 @@ window.otherReceive = function(pack) {
 	// }
 }
 
-window.otherInputReceive = function(packages) {
+window.otherInputReceive = function (packages) {
 	for (let i = 0; i < packages.length; i++) {
 		const data = packages[i];
+		if (!canOtherUpdate) {
+			otherStartTime = Date.now();
+		}
+		canOtherUpdate = true;
 		otherInputs[data.tick + otherBufferSize] = data.input;
 	}
 }
@@ -80,18 +87,24 @@ import Server from './server.js';
 import simulate from './simulate.js';
 
 const startTime = Date.now();
-window.id = 'id';
+window.id = '1';
 const radius = 20;
 
 const initialState = {
 	players: {
-		id: {
+		'1': {
 			x: 100,
 			y: 200,
 			xv: 0,
 			yv: 0,
+		},
+		'2': {
+			x: 100,
+			y: 300,
+			xv: 0,
+			yv: 0,
 		}
-	}
+	},
 };
 
 const currentInput = {
@@ -103,12 +116,12 @@ const currentInput = {
 
 const initialInputs = {
 	players: {
-		id: {
+		'1': {
 			up: false,
 			down: false,
 			right: false,
 			left: false
-		}
+		},
 	}
 };
 
@@ -120,27 +133,35 @@ const controls = {
 	KeyD: { movement: true, name: 'right' },
 }
 
-const server = new Server(copy(initialState), copy(initialInputs));
 
-let states = { 0: {...copy(initialState)} }; //
-let inputs = { 0: {...copy(initialInputs)} };
+let server = null;
+setTimeout(() => {
+	server = new Server(copy(initialState), copy(initialInputs));
+}, 200);
+
+let states = { 0: { ...copy(initialState) } }; //
+let inputs = { 0: { ...copy(initialInputs) } };
 let tick = 0;
 
-let otherStates = { 0: {...copy(initialState)} }; //
-let otherInputs = { 0: {...copy(initialInputs)} };
+let otherStates = { 0: { ...copy(initialState) } }; //
+let otherInputs = { 0: { ...copy(initialInputs) } };
 let otherTick = 0;
 
-const canvas = { client: document.getElementById('client'), 
+const canvas = {
+	client: document.getElementById('client'),
 	server: document.getElementById('server'),
-	other: document.getElementById('other') };
-const ctx = { client: canvas.client.getContext('2d'),
+	other: document.getElementById('other')
+};
+const ctx = {
+	client: canvas.client.getContext('2d'),
 	server: canvas.server.getContext('2d'),
-	other: canvas.other.getContext('2d') };
+	other: canvas.other.getContext('2d')
+};
 
 resize();
 window.onresize = resize;
 
-(function run() {	
+(function run() {
 	update();
 	render();
 	requestAnimationFrame(run);
@@ -153,8 +174,17 @@ function update() {
 		window.rrt = Math.min(window.rrt, window.minRrt + window.jitter);
 	}
 	localUpdate();
-	otherUpdate();
-	server.update();
+	if (canOtherUpdate) {
+		otherUpdate();
+	}
+	if (server) {
+		server.update();
+	}
+	if (window.ping) {
+		console.log("pinged client");
+		window.ping = false;
+		window.tickOffset = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
+	}
 }
 
 function localUpdate() {
@@ -163,18 +193,25 @@ function localUpdate() {
 	const inputPackages = [];
 	while (tick < expectedTick) {
 		tick++;
-		inputs[tick] = copy(inputs[tick - 1]);
-		inputs[tick].players[id] = input;
-		inputPackages.push({ tick, input: inputs[tick] });
-		states[tick] = simulate(copy(states[tick - 1]), inputs[tick]);
+		if (window.tickOffset == null) {
+			inputs[tick] = copy(inputs[tick - 1]);
+			states[tick] = copy(states[tick - 1]);
+		} else {
+			inputs[tick] = copy(inputs[tick - 1]);
+			inputs[tick].players[id] = input;
+			inputPackages.push({ tick: tick - window.tickOffset, input: inputs[tick] });
+			states[tick] = simulate(copy(states[tick - 1]), inputs[tick]);
+		}
 	}
 	setTimeout(() => {
-		server.receiveInputs(inputPackages);
+		if (server != null && window.tickOffset != null) {
+			server.receiveInputs(inputPackages);
+		}
 	}, window.rrt / 2);
 }
 
 function otherUpdate() {
-	const expectedTick = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
+	const expectedTick = Math.ceil((Date.now() - otherStartTime) * (simulation_rate / 1000));
 
 	while (otherTick < expectedTick) {
 		if (otherTick <= otherBufferSize - 1) {
@@ -187,8 +224,13 @@ function otherUpdate() {
 				break;
 			}
 			otherTick++;
-			const oldState = copy(otherStates[otherTick - 1]);
-			otherStates[otherTick] = simulate(copy(oldState), otherInputs[otherTick]);
+			if (window.tickOffset == null) {
+				otherStates[otherTick] = copy(otherStates[otherTick - 1]);
+				otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
+			} else {
+				const oldState = copy(otherStates[otherTick - 1]);
+				otherStates[otherTick] = simulate(copy(oldState), otherInputs[otherTick]);
+			}
 		}
 	}
 	// while (otherTick < expectedTick) {
@@ -219,29 +261,43 @@ function renderCanvas(canvas, ctx, type) {
 	ctx.textAlign = 'center';
 	ctx.fillStyle = 'black';
 	ctx.fillText(type + ` [RRT: ${Math.round(window.rrt)}ms]`, canvas.width / 2, 25);
-	ctx.fillText( `[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
+	ctx.fillText(`[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
 	if (type === 'Server') {
-		ctx.fillText( `[Buffer: ${Math.round(((1 / simulation_rate) * bufferSize) * 1000)}ms]`, canvas.width / 2, 85);
-		ctx.fillText( `[Tickrate: ${Math.round(window.tickRate)}]`, canvas.width / 2, 115);
+		ctx.fillText(`[Buffer: ${Math.round(((1 / simulation_rate) * bufferSize) * 1000)}ms]`, canvas.width / 2, 85);
+		ctx.fillText(`[Tickrate: ${Math.round(window.tickRate)}]`, canvas.width / 2, 115);
 	}
 	if (type === 'Other') {
-		ctx.fillText( `[Buffer: ${Math.round(((1 / simulation_rate) * otherBufferSize) * 1000)}ms]`, canvas.width / 2, 85);
+		ctx.fillText(`[Buffer: ${Math.round(((1 / simulation_rate) * otherBufferSize) * 1000)}ms]`, canvas.width / 2, 85);
 	}
 	ctx.fillStyle = 'black';
 	ctx.beginPath();
 	ctx.lineWidth = 4;
 	if (type === 'Client') {
 		ctx.strokeStyle = 'red';
-		ctx.arc(states[tick].players[id].x, states[tick].players[id].y, radius, 0, Math.PI * 2);
+		for (const i of Object.keys(states[tick].players)) {
+			ctx.beginPath();
+			ctx.arc(states[tick].players[i].x, states[tick].players[i].y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
 	} else if (type === 'Server') {
+		if (!server) return;
 		ctx.strokeStyle = 'green';
-		ctx.arc(server.states[server.tick].players[id].x, server.states[server.tick].players[id].y, radius, 0, Math.PI * 2);
+		for (const i of Object.keys(server.states[server.tick].players)) {
+			ctx.beginPath();
+			ctx.arc(server.states[server.tick].players[i].x, server.states[server.tick].players[i].y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
 	} else if (type === 'Other') {
 		ctx.strokeStyle = 'yellow';
-		ctx.arc(otherStates[otherTick].players[id].x, otherStates[otherTick].players[id].y, radius, 0, Math.PI * 2);
+		for (const i of Object.keys(otherStates[otherTick].players)) {
+			ctx.beginPath();
+			ctx.arc(otherStates[otherTick].players[i].x, otherStates[otherTick].players[i].y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
 	}
-	ctx.fill();
-	ctx.stroke();
 }
 
 function resize() {
@@ -268,8 +324,8 @@ function trackKeys(event) {
 
 function copy(obj) {
 	const object = Object.create(null);
-	for(const key of Object.keys(obj)) {
-		object[key] = typeof obj[key] === 'object' ? copy(obj[key]): obj[key];
+	for (const key of Object.keys(obj)) {
+		object[key] = typeof obj[key] === 'object' ? copy(obj[key]) : obj[key];
 	}
 	return object;
 }
