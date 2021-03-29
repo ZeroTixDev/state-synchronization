@@ -1,7 +1,8 @@
 window.simulation_rate = 60;
+window.minRrt = 50;
 window.rrt = 50;
 window.jitter = 25;
-window.otherBufferSize = 20;
+window.otherBufferSize = 16;
 
 // window.inputDecay = 0.99;
 
@@ -146,6 +147,11 @@ window.onresize = resize;
 })();
 
 function update() {
+	if (Math.random() < 0.1) {
+		window.rrt += (Math.random() * (window.jitter * 2) - window.jitter) * 0.4;
+		window.rrt = Math.max(window.rrt, window.minRrt);
+		window.rrt = Math.min(window.rrt, window.minRrt + window.jitter);
+	}
 	localUpdate();
 	otherUpdate();
 	server.update();
@@ -164,7 +170,7 @@ function localUpdate() {
 	}
 	setTimeout(() => {
 		server.receiveInputs(inputPackages);
-	}, Math.random() * window.jitter);
+	}, window.rrt / 2);
 }
 
 function otherUpdate() {
@@ -212,10 +218,11 @@ function renderCanvas(canvas, ctx, type) {
 	ctx.font = '25px Arial';
 	ctx.textAlign = 'center';
 	ctx.fillStyle = 'black';
-	ctx.fillText(type + ` [RRT: ${window.rrt}ms]`, canvas.width / 2, 25);
+	ctx.fillText(type + ` [RRT: ${Math.round(window.rrt)}ms]`, canvas.width / 2, 25);
 	ctx.fillText( `[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
 	if (type === 'Server') {
 		ctx.fillText( `[Buffer: ${Math.round(((1 / simulation_rate) * bufferSize) * 1000)}ms]`, canvas.width / 2, 85);
+		ctx.fillText( `[Tickrate: ${Math.round(window.tickRate)}]`, canvas.width / 2, 115);
 	}
 	if (type === 'Other') {
 		ctx.fillText( `[Buffer: ${Math.round(((1 / simulation_rate) * otherBufferSize) * 1000)}ms]`, canvas.width / 2, 85);
