@@ -16,11 +16,11 @@ window.clientReceiveLocal = function (pack) {
 
 	const roundedState = copy(states[serverTick]);
 	for (const key of Object.keys(roundedState.players)) {
-		roundedState.players[key].x = Math.floor(roundedState.players[key].x);
-		roundedState.players[key].y = Math.floor(roundedState.players[key].y);
+		roundedState.players[key].x = Math.round(roundedState.players[key].x);
+		roundedState.players[key].y = Math.round(roundedState.players[key].y);
 	}
-	roundedState.ball.x = Math.floor(roundedState.ball.x);
-	roundedState.ball.y = Math.floor(roundedState.ball.y);
+	roundedState.ball.x = Math.round(roundedState.ball.x);
+	roundedState.ball.y = Math.round(roundedState.ball.y);
 
 	if (!isSameStates(serverState, roundedState)) {
 
@@ -47,11 +47,11 @@ window.otherReceive = function (pack) {
 	if (stateExists) {
 		roundedState = copy(otherStates[serverTick]);
 		for (const key of Object.keys(roundedState.players)) {
-			roundedState.players[key].x = Math.floor(roundedState.players[key].x);
-			roundedState.players[key].y = Math.floor(roundedState.players[key].y);
+			roundedState.players[key].x = Math.round(roundedState.players[key].x);
+			roundedState.players[key].y = Math.round(roundedState.players[key].y);
 		}
-		roundedState.ball.x = Math.floor(roundedState.ball.x);
-		roundedState.ball.y = Math.floor(roundedState.ball.y);
+		roundedState.ball.x = Math.round(roundedState.ball.x);
+		roundedState.ball.y = Math.round(roundedState.ball.y);
 	}
 	let correction = false;
 	if (!stateExists) {

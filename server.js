@@ -38,9 +38,11 @@ export default class Server {
 		if (this.updated) {
 			const sendState = copy(this.states[this.tick]);
 			for (const key of Object.keys(sendState.players)) {
-				sendState.players[key].x = Math.floor(sendState.players[key].x);
-				sendState.players[key].y = Math.floor(sendState.players[key].y);
+				sendState.players[key].x = Math.round(sendState.players[key].x);
+				sendState.players[key].y = Math.round(sendState.players[key].y);
 			}
+			sendState.ball.x = Math.round(sendState.ball.x);
+			sendState.ball.y = Math.round(sendState.ball.y);
 			const pack = { state: {...sendState},
 				input: {...copy(this.inputs[this.tick])},
 				tick: this.tick - bufferSize};
