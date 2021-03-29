@@ -1,6 +1,6 @@
 const accel = 1200;
 const friction = 0.83;
-const knock = 100;
+const knock = 200;
 
 window.radius = 20;
 
