@@ -1,8 +1,8 @@
-window.simulation_rate = 60;
-window.minRrt = 100;
+window.simulation_rate = 120;
+window.minRrt = 50;
 window.rrt = 100;
-window.jitter = 100;
-window.otherBufferSize = 16;
+window.jitter = 150;
+window.otherBufferSize = 35;
 window.tickOffset = null;
 window.canOtherUpdate = false;
 window.otherStartTime = null;
@@ -19,13 +19,15 @@ window.clientReceiveLocal = function (pack) {
 		roundedState.players[key].x = Math.floor(roundedState.players[key].x);
 		roundedState.players[key].y = Math.floor(roundedState.players[key].y);
 	}
+	roundedState.ball.x = Math.floor(roundedState.ball.x);
+	roundedState.ball.y = Math.floor(roundedState.ball.y);
 
 	if (!isSameStates(serverState, roundedState)) {
 
-		console.log('correction happened', serverTick, 'compare', serverState, roundedState);
+		// console.log('correction happened', serverTick, tick, 'compare', serverState, roundedState);
 		states[serverTick] = serverState;
 		inputs[serverTick] = serverInput;
-		let currentTick = serverTick - 1;
+		let currentTick = serverTick;
 		while (currentTick < tick) {
 			currentTick++;
 			states[currentTick] = simulate(copy(states[currentTick - 1]),
@@ -37,29 +39,40 @@ window.otherReceive = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
 	const serverTick = pack.tick + tickOffset;
-
-	if (!otherStates[serverTick + otherBufferSize]) {
-		// otherStates[serverTick + otherBufferSize] = serverState;
-		// otherInputs[serverTick + otherBufferSize] = serverInput;
-		return;
+	let stateExists = true;
+	if (otherStates[serverTick] === undefined) {
+		stateExists = false;
+	}
+	let roundedState = null;
+	if (stateExists) {
+		roundedState = copy(otherStates[serverTick]);
+		for (const key of Object.keys(roundedState.players)) {
+			roundedState.players[key].x = Math.floor(roundedState.players[key].x);
+			roundedState.players[key].y = Math.floor(roundedState.players[key].y);
+		}
+		roundedState.ball.x = Math.floor(roundedState.ball.x);
+		roundedState.ball.y = Math.floor(roundedState.ball.y);
+	}
+	let correction = false;
+	if (!stateExists) {
+		correction = true;
+	}
+	if (stateExists && roundedState && !isSameStates(serverState, roundedState)) {
+		correction = true;
 	}
 
-	const roundedState = copy(otherStates[serverTick + otherBufferSize]);
-	for (const key of Object.keys(roundedState.players)) {
-		roundedState.players[key].x = Math.floor(roundedState.players[key].x);
-		roundedState.players[key].y = Math.floor(roundedState.players[key].y);
-	}
-
-	if (!isSameStates(serverState, roundedState)) {
-		otherStates[serverTick + otherBufferSize] = serverState;
-		otherInputs[serverTick + otherBufferSize] = serverInput;
-		let currentTick = serverTick - 1;
+	if (correction) {
+		otherStates[serverTick] = serverState;
+		otherInputs[serverTick] = serverInput;
+		let currentTick = serverTick;
 		while (currentTick < otherTick) {
 			if (otherInputs[currentTick] === undefined) {
 				break;
 			}
 			currentTick++;
-			otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
+			if (!otherStates[currentTick]) {
+				otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
+			}
 		}
 	}
 
@@ -116,6 +129,18 @@ const initialState = {
 			yv: 0,
 		}
 	},
+	bound: {
+		x: 0,
+		y: 0,
+		width: Math.round(window.innerWidth / 3),
+		height: window.innerHeight
+	},
+	ball: {
+		x: Math.round(window.innerWidth / 6),
+		y: Math.round(window.innerHeight / 1.5),
+		xv: 0,
+		yv: 0,
+	}
 };
 
 const currentInput = {
@@ -210,7 +235,7 @@ function localUpdate() {
 		} else {
 			inputs[tick] = copy(inputs[tick - 1]);
 			inputs[tick].players[id] = input;
-			inputPackages.push({ tick: tick - window.tickOffset, input: inputs[tick] });
+			inputPackages.push({ tick: tick - window.tickOffset, input: copy(inputs[tick]) });
 			states[tick] = simulate(copy(states[tick - 1]), inputs[tick]);
 		}
 	}
@@ -240,7 +265,9 @@ function otherUpdate() {
 				otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
 			} else {
 				const oldState = copy(otherStates[otherTick - 1]);
-				otherStates[otherTick] = simulate(copy(oldState), otherInputs[otherTick]);
+				if (!otherStates[otherTick]) {
+					otherStates[otherTick] = simulate(copy(oldState), copy(otherInputs[otherTick]));
+				}
 			}
 		}
 	}
@@ -268,9 +295,57 @@ function render() {
 function renderCanvas(canvas, ctx, type) {
 	ctx.fillStyle = '#43434f';
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.font = '25px Arial';
-	ctx.textAlign = 'center';
 	ctx.fillStyle = 'black';
+	ctx.strokeStyle = 'white';
+	ctx.lineWidth = 4;
+	if (type === 'Client') {
+		ctx.strokeRect(states[tick].bound.x, states[tick].bound.y, states[tick].bound.width, states[tick].bound.height)
+		ctx.strokeStyle = 'red';
+		for (const i of Object.keys(states[tick].players)) {
+			ctx.beginPath();
+			ctx.arc(states[tick].players[i].x, states[tick].players[i].y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.fillStyle = 'white';
+		ctx.beginPath();
+		ctx.arc(states[tick].ball.x, states[tick].ball.y, ballRadius, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
+	} else if (type === 'Server') {
+		if (server) {
+			ctx.strokeRect(server.states[server.tick].bound.x, server.states[server.tick].bound.y, server.states[server.tick].bound.width, server.states[server.tick].bound.height);
+			ctx.strokeStyle = 'green';
+			for (const i of Object.keys(server.states[server.tick].players)) {
+				ctx.beginPath();
+				ctx.arc(server.states[server.tick].players[i].x, server.states[server.tick].players[i].y, radius, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.fillStyle = 'white';
+			ctx.beginPath();
+			ctx.arc(server.states[server.tick].ball.x, server.states[server.tick].ball.y, ballRadius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
+	} else if (type === 'Other') {
+		ctx.strokeRect(otherStates[otherTick].bound.x, otherStates[otherTick].bound.y, otherStates[otherTick].bound.width, otherStates[otherTick].bound.height)
+		ctx.strokeStyle = 'yellow';
+		for (const i of Object.keys(otherStates[otherTick].players)) {
+			ctx.beginPath();
+			ctx.arc(otherStates[otherTick].players[i].x, otherStates[otherTick].players[i].y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.fillStyle = 'white';
+		ctx.beginPath();
+		ctx.arc(otherStates[otherTick].ball.x, otherStates[otherTick].ball.y, ballRadius, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
+	}
+	ctx.font = '20px Arial';
+	ctx.textAlign = 'center';
+	ctx.fillStyle = 'white';
 	ctx.fillText(type + ` [RRT: ${Math.round(window.rrt)}ms]`, canvas.width / 2, 25);
 	ctx.fillText(`[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
 	if (type === 'Server') {
@@ -279,35 +354,6 @@ function renderCanvas(canvas, ctx, type) {
 	}
 	if (type === 'Other') {
 		ctx.fillText(`[Buffer: ${Math.round(((1 / simulation_rate) * otherBufferSize) * 1000)}ms]`, canvas.width / 2, 85);
-	}
-	ctx.fillStyle = 'black';
-	ctx.beginPath();
-	ctx.lineWidth = 4;
-	if (type === 'Client') {
-		ctx.strokeStyle = 'red';
-		for (const i of Object.keys(states[tick].players)) {
-			ctx.beginPath();
-			ctx.arc(states[tick].players[i].x, states[tick].players[i].y, radius, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.stroke();
-		}
-	} else if (type === 'Server') {
-		if (!server) return;
-		ctx.strokeStyle = 'green';
-		for (const i of Object.keys(server.states[server.tick].players)) {
-			ctx.beginPath();
-			ctx.arc(server.states[server.tick].players[i].x, server.states[server.tick].players[i].y, radius, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.stroke();
-		}
-	} else if (type === 'Other') {
-		ctx.strokeStyle = 'yellow';
-		for (const i of Object.keys(otherStates[otherTick].players)) {
-			ctx.beginPath();
-			ctx.arc(otherStates[otherTick].players[i].x, otherStates[otherTick].players[i].y, radius, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.stroke();
-		}
 	}
 }
 
@@ -352,6 +398,13 @@ function isSameStates(state1, state2) {
 			if (distX > 3 || distY > 3) {
 				return false;
 			}
+		}
+		const ball1 = state1.ball;
+		const ball2 = state2.ball;
+		const distX = ball1.x - ball2.x;
+		const distY = ball1.y - ball2.y;
+		if (distX > 3 || distY > 3) {
+			return false;
 		}
 	}
 	return true;

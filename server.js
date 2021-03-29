@@ -1,6 +1,6 @@
 import simulate from './simulate.js';
 
-window.bufferSize = 13;
+window.bufferSize = 30;
 window.tickRate = 20;
 window.ping = false;
 
