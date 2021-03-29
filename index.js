@@ -88,7 +88,6 @@ import simulate from './simulate.js';
 
 const startTime = Date.now();
 window.id = '1';
-const radius = 20;
 
 const initialState = {
 	players: {
