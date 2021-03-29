@@ -1,7 +1,7 @@
 window.simulation_rate = 60;
-window.rrt = 75;
+window.rrt = 50;
 window.jitter = 25;
-window.otherBufferSize = 10;
+window.otherBufferSize = 20;
 
 // window.inputDecay = 0.99;
 
@@ -87,6 +87,8 @@ const initialState = {
 		id: {
 			x: 100,
 			y: 200,
+			xv: 0,
+			yv: 0,
 		}
 	}
 };

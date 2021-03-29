@@ -1,4 +1,5 @@
-const vel = 150;
+const accel = 1200;
+const friction = 0.83;
 
 export default function simulate(state, inputs) {
 	const delta = 1 / window.simulation_rate;
@@ -7,17 +8,21 @@ export default function simulate(state, inputs) {
 		const player = newState.players[id];
 		const input = inputs.players[id];
 		if (input.up) {
-			player.y -= vel * delta * input.up;
+			player.yv -= accel * delta * input.up;
 		}
 		if (input.down) {
-			player.y += vel * delta * input.down;
+			player.yv += accel * delta * input.down;
 		}
 		if (input.left) {
-			player.x -= vel * delta * input.left;
+			player.xv -= accel * delta * input.left;
 		}
 		if (input.right) {
-			player.x += vel * delta * input.right;
+			player.xv += accel * delta * input.right;
 		}
+		player.xv *= Math.pow(friction, delta * 30);
+		player.yv *= Math.pow(friction, delta * 30);
+		player.x += player.xv * delta;
+		player.y += player.yv * delta;
 	}
 	return newState;
 }
