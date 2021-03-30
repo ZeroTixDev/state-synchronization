@@ -1,4 +1,4 @@
-const accel = 1200;
+const accel = 1500;
 const friction = 0.83;
 const knock = 200;
 window.ballRadius = 30;

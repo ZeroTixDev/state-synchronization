@@ -1,7 +1,7 @@
 import simulate from './simulate.js';
 
-window.bufferSize = 30;
-window.tickRate = 20;
+window.bufferSize = 6;
+window.tickRate = 30;
 window.ping = false;
 
 export default class Server {

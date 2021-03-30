@@ -1,8 +1,9 @@
-window.simulation_rate = 120;
+window.simulation_rate = 60;
 window.minRrt = 50;
-window.rrt = 100;
-window.jitter = 150;
-window.otherBufferSize = 35;
+window.rrt = 50;
+window.jitter = 100;
+window.otherBufferSize = 10;
+window.localBuffer = 4;
 window.tickOffset = null;
 window.canOtherUpdate = false;
 window.otherStartTime = null;
@@ -12,7 +13,7 @@ window.otherStartTime = null;
 window.clientReceiveLocal = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick + tickOffset;
+	const serverTick = pack.tick + tickOffset + localBuffer;
 
 	const roundedState = copy(states[serverTick]);
 	for (const key of Object.keys(roundedState.players)) {
@@ -228,14 +229,19 @@ function localUpdate() {
 	const input = copy(currentInput);
 	const inputPackages = [];
 	while (tick < expectedTick) {
-		tick++;
 		if (window.tickOffset == null) {
+			tick++;
 			inputs[tick] = copy(inputs[tick - 1]);
 			states[tick] = copy(states[tick - 1]);
 		} else {
-			inputs[tick] = copy(inputs[tick - 1]);
-			inputs[tick].players[id] = input;
-			inputPackages.push({ tick: tick - window.tickOffset, input: copy(inputs[tick]) });
+			// inputs[tick + 1] = copy(inputs[tick]);
+			inputs[tick + 1 + localBuffer] = copy(inputs[tick]);
+			inputs[tick + 1 + localBuffer].players[id] = copy(input);
+			inputPackages.push({ tick: tick - tickOffset + 1, input: copy(inputs[tick + 1 + localBuffer]) });
+			if (inputs[tick + 1] === undefined) {
+				inputs[tick + 1] = copy(inputs[tick]);
+			}
+			tick++;
 			states[tick] = simulate(copy(states[tick - 1]), inputs[tick]);
 		}
 	}
@@ -348,6 +354,9 @@ function renderCanvas(canvas, ctx, type) {
 	ctx.fillStyle = 'white';
 	ctx.fillText(type + ` [RRT: ${Math.round(window.rrt)}ms]`, canvas.width / 2, 25);
 	ctx.fillText(`[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
+	if (type === 'Client') {
+		ctx.fillText(`[LocalBuffer: ${Math.round(((1 / simulation_rate) * localBuffer) * 1000)}ms]`, canvas.width / 2, 85);	
+	}
 	if (type === 'Server') {
 		ctx.fillText(`[Buffer: ${Math.round(((1 / simulation_rate) * bufferSize) * 1000)}ms]`, canvas.width / 2, 85);
 		ctx.fillText(`[Tickrate: ${Math.round(window.tickRate)}]`, canvas.width / 2, 115);
@@ -401,8 +410,8 @@ function isSameStates(state1, state2) {
 		}
 		const ball1 = state1.ball;
 		const ball2 = state2.ball;
-		const distX = ball1.x - ball2.x;
-		const distY = ball1.y - ball2.y;
+		const distX = Math.abs(ball1.x - ball2.x);
+		const distY = Math.abs(ball1.y - ball2.y);
 		if (distX > 3 || distY > 3) {
 			return false;
 		}
