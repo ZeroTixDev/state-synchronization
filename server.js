@@ -1,12 +1,13 @@
 import simulate from './simulate.js';
 
-window.bufferSize = 6;
-window.tickRate = 30;
+window.bufferSize = 3;
+window.tickRate = 60;
 window.ping = false;
 
 export default class Server {
 	constructor(state, inputs) {
 		this.tick = 0;
+		// this.confirmTick = 0;
 		this.states = {};
 		this.inputs = {};
 		this.startTime = Date.now();
@@ -27,6 +28,18 @@ export default class Server {
 			for (let i = 0; i < packages.length; i++) {
 				const { input, tick } = packages[i];
 				this.inputs[tick + bufferSize] = input;
+				if (tick + bufferSize < this.tick) {
+					let currentTick = tick + bufferSize - 1;
+					while (currentTick < this.tick) {
+						if (this.inputs[currentTick + 1] === undefined) {
+							break;
+						}
+						currentTick++;
+						const oldState = copy(this.states[currentTick - 1]) || copy(this.initState);
+						this.states[currentTick] = simulate(copy(oldState), this.inputs[currentTick]);
+						this.updated = true;
+					}
+				}
 				this.inputPackages.push(copy({ input, tick }));
 			}
 		}, window.rrt / 2);
@@ -36,15 +49,8 @@ export default class Server {
 	}
 	send() {
 		if (this.updated) {
-			const sendState = copy(this.states[this.tick]);
-			for (const key of Object.keys(sendState.players)) {
-				sendState.players[key].x = Math.round(sendState.players[key].x);
-				sendState.players[key].y = Math.round(sendState.players[key].y);
-			}
-			sendState.ball.x = Math.round(sendState.ball.x);
-			sendState.ball.y = Math.round(sendState.ball.y);
-			const pack = { state: {...sendState},
-				input: {...copy(this.inputs[this.tick])},
+			const pack = { state: copy(this.states[this.tick]),
+				input: copy(this.inputs[this.tick]),
 				tick: this.tick - bufferSize};
 			setTimeout(() => {
 				window.clientReceiveLocal(pack);
