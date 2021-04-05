@@ -1,19 +1,19 @@
 window.simulation_rate = 60;
-window.minRrt = 20;
-window.rrt = 200;
+window.minRrt = 50;
+window.rrt = 50;
 window.jitter = 100;
-window.otherBufferSize = 2;
-window.localBuffer = 3;
+window.otherBufferSize = 10;
+window.localBuffer = 4;
 window.tickOffset = null;
 window.canOtherUpdate = false;
 window.otherStartTime = null;
 
-window.inputDecay = 0.95;
+// window.inputDecay = 0.99;
 
 window.clientReceiveLocal = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick + localBuffer + tickOffset;
+	const serverTick = pack.tick + tickOffset + localBuffer;
 
 	const roundedState = copy(states[serverTick]);
 	for (const key of Object.keys(roundedState.players)) {
@@ -39,7 +39,7 @@ window.clientReceiveLocal = function (pack) {
 window.otherReceive = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick + tickOffset + localBuffer;
+	const serverTick = pack.tick + tickOffset;
 	let stateExists = true;
 	if (otherStates[serverTick] === undefined) {
 		stateExists = false;
@@ -67,15 +67,8 @@ window.otherReceive = function (pack) {
 		otherInputs[serverTick] = serverInput;
 		let currentTick = serverTick;
 		while (currentTick < otherTick) {
-			if (otherInputs[currentTick + 1] === undefined) {
-				const oldInput = copy(otherInputs[currentTick]);
-				for (const input of Object.values(oldInput.players)) {
-					input.up *= inputDecay;
-					input.down *= inputDecay;
-					input.left *= inputDecay;
-					input.right *= inputDecay;
-				}
-				otherInputs[currentTick + 1] = oldInput;
+			if (otherInputs[currentTick] === undefined) {
+				break;
 			}
 			currentTick++;
 			if (!otherStates[currentTick]) {
@@ -93,8 +86,7 @@ window.otherReceive = function (pack) {
 	// }
 }
 
-window.otherInputReceive = function (packs) {
-	const packages = packs.sort((a, b) => a.tick - b.tick);
+window.otherInputReceive = function (packages) {
 	for (let i = 0; i < packages.length; i++) {
 		const data = packages[i];
 		if (!canOtherUpdate) {
@@ -102,26 +94,6 @@ window.otherInputReceive = function (packs) {
 		}
 		canOtherUpdate = true;
 		otherInputs[data.tick + otherBufferSize] = data.input;
-		if (data.tick + otherBufferSize < otherTick) {
-			let currentTick = data.tick + otherBufferSize - 1;
-			console.log('went back to ', currentTick, otherTick);
-			while (currentTick < otherTick) {
-				if (otherInputs[currentTick + 1] === undefined) {
-					const oldInput = copy(otherInputs[currentTick]);
-					for (const input of Object.values(oldInput.players)) {
-						input.up *= inputDecay;
-						input.down *= inputDecay;
-						input.left *= inputDecay;
-						input.right *= inputDecay;
-					}
-					otherInputs[currentTick + 1] = oldInput;
-				}
-				currentTick++;
-				if (!otherStates[currentTick]) {
-					otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
-				}
-			}
-		}
 	}
 }
 
@@ -290,15 +262,8 @@ function otherUpdate() {
 			otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
 		} else {
 			if (otherInputs[otherTick + 1] === undefined) {
-				const oldInput = copy(otherInputs[otherTick]);
-				for (const input of Object.values(oldInput.players)) {
-					input.up *= inputDecay;
-					input.down *= inputDecay;
-					input.left *= inputDecay;
-					input.right *= inputDecay;
-				}
-				otherInputs[otherTick + 1] = oldInput;
-				// break;
+				// otherInputs[otherTick + 1] = copy(otherInputs[otherTick]);
+				break;
 			}
 			otherTick++;
 			if (window.tickOffset == null) {
@@ -435,16 +400,16 @@ function copy(obj) {
 function isSameStates(state1, state2) {
 	if (JSON.stringify(state1) !== JSON.stringify(state2)) {
 		for (const key of Object.keys(state1.players)) {
-			const player1 = copy(state1.players[key]);
-			const player2 = copy(state2.players[key]);
+			const player1 = state1.players[key];
+			const player2 = state2.players[key];
 			const distX = Math.abs(player1.x - player2.x);
 			const distY = Math.abs(player1.y - player2.y);
 			if (distX > 3 || distY > 3) {
 				return false;
 			}
 		}
-		const ball1 = copy(state1.ball);
-		const ball2 = copy(state2.ball);
+		const ball1 = state1.ball;
+		const ball2 = state2.ball;
 		const distX = Math.abs(ball1.x - ball2.x);
 		const distY = Math.abs(ball1.y - ball2.y);
 		if (distX > 3 || distY > 3) {
