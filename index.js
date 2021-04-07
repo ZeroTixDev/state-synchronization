@@ -1,4 +1,4 @@
-window.simulation_rate = 60;
+window.simulation_rate = 120;
 window.minRrt = 25;
 window.jitter = 100;
 window.otherBufferSize = 0;
@@ -93,6 +93,7 @@ import simulate from './simulate.js';
 
 const startTime = Date.now();
 window.id = '1';
+window.oid = '2';
 
 const initialState = {
 	players: {
@@ -142,9 +143,22 @@ const currentInput = {
 	left: false
 };
 
+const otherCurrentInput = {
+	up: false,
+	down: false,
+	right: false,
+	left: false
+};
+
 const initialInputs = {
 	players: {
 		'1': {
+			up: false,
+			down: false,
+			right: false,
+			left: false
+		},
+		'2': {
 			up: false,
 			down: false,
 			right: false,
@@ -159,15 +173,19 @@ const controls = {
 	KeyA: { movement: true, name: 'left' },
 	KeyS: { movement: true, name: 'down' },
 	KeyD: { movement: true, name: 'right' },
-	KeyI: { lag: true, name: 'up' },
-	KeyO: { lag: true, name: 'down' }
+	KeyI: { otherMovement: true, name: 'up' },
+	KeyJ: { otherMovement: true, name: 'left' },
+	KeyK: { otherMovement: true, name: 'down' },
+	KeyL: { otherMovement: true, name: 'right' },
+	KeyO: { lag: true, name: 'up' },
+	KeyP: { lag: true, name: 'down' }
 }
 
 
 let server = null;
 setTimeout(() => {
 	server = new Server(copy(initialState), copy(initialInputs));
-}, 200);
+}, 500);
 
 window.states = { 0: { ...copy(initialState) } }; //
 window.inputs = { 0: { ...copy(initialInputs) } };
@@ -224,6 +242,7 @@ function update() {
 function localUpdate() {
 	const expectedTick = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
 	const input = copy(currentInput);
+	const otherInput = copy(otherCurrentInput);
 	const inputPackages = [];
 	while (tick < expectedTick) {
 		if (window.tickOffset == null) {
@@ -234,6 +253,7 @@ function localUpdate() {
 			// inputs[tick + 1] = copy(inputs[tick]);
 			inputs[tick + 1 + localBuffer] = copy(inputs[tick]);
 			inputs[tick + 1 + localBuffer].players[id] = copy(input);
+			inputs[tick + 1 + localBuffer].players[oid] = copy(otherInput);
 			inputPackages.push({ tick: tick - tickOffset + 1, input: copy(inputs[tick + 1 + localBuffer]) });
 			if (inputs[tick + 1] === undefined) {
 				inputs[tick + 1] = copy(inputs[tick]);
@@ -418,6 +438,9 @@ function trackKeys(event) {
 	const control = controls[event.code];
 	if (control.movement) {
 		currentInput[control.name] = event.type === 'keydown';
+	}
+	if (control.otherMovement) {
+		otherCurrentInput[control.name] = event.type === 'keydown';
 	}
 	if (control.lag && event.type === 'keydown') {
 		if (control.name === 'up') {

@@ -1,6 +1,6 @@
-const accel = 1200;
-const friction = 0.8;
-const knock = 175;
+const accel = 1000;
+const friction = 0.76
+const knock = 100;
 window.ballRadius = 30;
 window.radius = 20;
 
@@ -56,8 +56,8 @@ export default function simulate(oldState, inputs) {
 			const yv = distY / magnitude;
 			player.xv += xv * knock * 0.5;
 			player.yv += yv * knock * 0.5;
-			state.ball.xv += -xv * knock * 0.2;
-			state.ball.yv += -yv * knock * 0.2;
+			state.ball.xv += -xv * knock * 1.2;
+			state.ball.yv += -yv * knock * 1.2;
 		}
 	}
 	// ball update
