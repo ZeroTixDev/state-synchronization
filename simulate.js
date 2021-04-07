@@ -1,48 +1,51 @@
-const accel = 1500;
-const friction = 0.83;
-const knock = 200;
+const accel = 1200;
+const friction = 0.8;
+const knock = 175;
 window.ballRadius = 30;
 window.radius = 20;
 
 export default function simulate(oldState, inputs) {
 	const delta = 1 / window.simulation_rate;
 	const state = copy(oldState);
-	for (const id of Object.keys(state.players)) {
-		const player = state.players[id];
-		const input = inputs.players[id];
-		if (input) {
-			if (input.up) {
-				player.yv -= accel * delta * input.up;
-			}
-			if (input.down) {
-				player.yv += accel * delta * input.down;
-			}
-			if (input.left) {
-				player.xv -= accel * delta * input.left;
-			}
-			if (input.right) {
-				player.xv += accel * delta * input.right;
+	for (const playerId of Object.keys(state.players)) {
+		const player = state.players[playerId];
+		if (!player) continue;
+		if (inputs && inputs.players && inputs.players[playerId]) {
+			const input = inputs.players[playerId];
+			if (input !== undefined) {
+				if (input.up) {
+					player.yv -= accel * delta * input.up;
+				}
+				if (input.down) {
+					player.yv += accel * delta * input.down;
+				}
+				if (input.left) {
+					player.xv -= accel * delta * input.left;
+				}
+				if (input.right) {
+					player.xv += accel * delta * input.right;
+				}
 			}
 		}
-		player.xv *= Math.pow(friction, delta * 30);
-		player.yv *= Math.pow(friction, delta * 30);
+		player.xv *= Math.pow(friction, delta * 15);
+		player.yv *= Math.pow(friction, delta * 15);
 		player.x += player.xv * delta;
 		player.y += player.yv * delta;
 		if (player.x + radius > state.bound.width + state.bound.x) {
 			player.x = state.bound.width + state.bound.x - radius;
-			player.xv = 0;
+			player.xv *= -0.9;
 		}
 		if (player.x - radius < state.bound.x) {
 			player.x = state.bound.x + radius;
-			player.xv = 0;
+			player.xv *= -0.9;
 		}
 		if (player.y + radius > state.bound.y + state.bound.height) {
 			player.y = state.bound.y + state.bound.height - radius;
-			player.yv = 0;
+			player.yv *= -0.9;
 		}
 		if (player.y - radius < state.bound.y) {
 			player.y = state.bound.y + radius;
-			player.yv = 0;
+			player.yv *= -0.9;
 		}
 		// test for ball collision
 		const distX = player.x - state.ball.x;
@@ -51,10 +54,10 @@ export default function simulate(oldState, inputs) {
 			const magnitude = Math.sqrt(distX * distX + distY * distY) || 1;
 			const xv = distX / magnitude;
 			const yv = distY / magnitude;
-			player.xv += xv * knock;
-			player.yv += yv * knock;
-			state.ball.xv += -xv * knock * 1.5;
-			state.ball.yv += -yv * knock * 1.5;
+			player.xv += xv * knock * 0.5;
+			player.yv += yv * knock * 0.5;
+			state.ball.xv += -xv * knock * 0.2;
+			state.ball.yv += -yv * knock * 0.2;
 		}
 	}
 	// ball update

@@ -1,33 +1,27 @@
 window.simulation_rate = 60;
-window.minRrt = 50;
-window.rrt = 50;
+window.minRrt = 25;
 window.jitter = 100;
-window.otherBufferSize = 10;
-window.localBuffer = 4;
+window.otherBufferSize = 0;
+window.localBuffer = 0;
 window.tickOffset = null;
 window.canOtherUpdate = false;
 window.otherStartTime = null;
 
-// window.inputDecay = 0.99;
+window.inputDecay = 1;
 
 window.clientReceiveLocal = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
 	const serverTick = pack.tick + tickOffset + localBuffer;
 
-	const roundedState = copy(states[serverTick]);
-	for (const key of Object.keys(roundedState.players)) {
-		roundedState.players[key].x = Math.round(roundedState.players[key].x);
-		roundedState.players[key].y = Math.round(roundedState.players[key].y);
-	}
-	roundedState.ball.x = Math.round(roundedState.ball.x);
-	roundedState.ball.y = Math.round(roundedState.ball.y);
+	const myState = copy(states[serverTick]);
 
-	if (!isSameStates(serverState, roundedState)) {
+	if (!isSameStates(serverState, myState)) {
 
 		// console.log('correction happened', serverTick, tick, 'compare', serverState, roundedState);
-		states[serverTick] = serverState;
-		inputs[serverTick] = serverInput;
+		states[serverTick] = copy(serverState);
+		states[serverTick].ball = copy(serverState.ball);
+		inputs[serverTick] = copy(serverInput);
 		let currentTick = serverTick;
 		while (currentTick < tick) {
 			currentTick++;
@@ -39,41 +33,38 @@ window.clientReceiveLocal = function (pack) {
 window.otherReceive = function (pack) {
 	const serverState = pack.state;
 	const serverInput = pack.input;
-	const serverTick = pack.tick + tickOffset;
+	const serverTick = pack.tick + otherBufferSize;
 	let stateExists = true;
 	if (otherStates[serverTick] === undefined) {
-		stateExists = false;
-	}
-	let roundedState = null;
-	if (stateExists) {
-		roundedState = copy(otherStates[serverTick]);
-		for (const key of Object.keys(roundedState.players)) {
-			roundedState.players[key].x = Math.round(roundedState.players[key].x);
-			roundedState.players[key].y = Math.round(roundedState.players[key].y);
-		}
-		roundedState.ball.x = Math.round(roundedState.ball.x);
-		roundedState.ball.y = Math.round(roundedState.ball.y);
+		otherStates[serverTick] = serverState;
+		otherInputs[serverTick] = serverInput;
+		return;
 	}
 	let correction = false;
 	if (!stateExists) {
 		correction = true;
 	}
-	if (stateExists && roundedState && !isSameStates(serverState, roundedState)) {
+	if (stateExists  && !isSameStates(serverState, otherStates[serverTick])) {
 		correction = true;
 	}
 
 	if (correction) {
-		otherStates[serverTick] = serverState;
-		otherInputs[serverTick] = serverInput;
+		otherStates[serverTick] = copy(serverState);
+		otherStates[serverTick].ball = copy(serverState.ball);
+		otherInputs[serverTick] = copy(serverInput);
+		console.log('corrected other', serverTick, otherTick);
 		let currentTick = serverTick;
 		while (currentTick < otherTick) {
-			if (otherInputs[currentTick] === undefined) {
+			if (otherInputs[currentTick + 1] === undefined) {
+				// otherInputs[currentTick + 1] = copy(otherInputs[currentTick]);
+				// const oldState = copy(otherStates[currentTick]);
+				// const oldInput = copy(otherInputs[currentTick]);
+				// otherStates[currentTick] = simulate(oldState, oldInput);
+				// continue;
 				break;
 			}
 			currentTick++;
-			if (!otherStates[currentTick]) {
-				otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
-			}
+			otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
 		}
 	}
 
@@ -168,6 +159,8 @@ const controls = {
 	KeyA: { movement: true, name: 'left' },
 	KeyS: { movement: true, name: 'down' },
 	KeyD: { movement: true, name: 'right' },
+	KeyI: { lag: true, name: 'up' },
+	KeyO: { lag: true, name: 'down' }
 }
 
 
@@ -176,13 +169,14 @@ setTimeout(() => {
 	server = new Server(copy(initialState), copy(initialInputs));
 }, 200);
 
-let states = { 0: { ...copy(initialState) } }; //
-let inputs = { 0: { ...copy(initialInputs) } };
-let tick = 0;
+window.states = { 0: { ...copy(initialState) } }; //
+window.inputs = { 0: { ...copy(initialInputs) } };
+window.tick = 0;
 
-let otherStates = { 0: { ...copy(initialState) } }; //
-let otherInputs = { 0: { ...copy(initialInputs) } };
-let otherTick = 0;
+window.otherStates = { 0: { ...copy(initialState) } }; //
+window.otherInputs = { 0: { ...copy(initialInputs) } };
+window.otherTick = 0;
+window.otherCounter = 0;
 
 const canvas = {
 	client: document.getElementById('client'),
@@ -206,6 +200,9 @@ window.onresize = resize;
 
 function update() {
 	if (Math.random() < 0.1) {
+		if (!window.rrt) {
+			window.rrt = window.minRrt + window.jitter / 2;
+		}
 		window.rrt += (Math.random() * (window.jitter * 2) - window.jitter) * 0.4;
 		window.rrt = Math.max(window.rrt, window.minRrt);
 		window.rrt = Math.min(window.rrt, window.minRrt + window.jitter);
@@ -252,28 +249,64 @@ function localUpdate() {
 	}, window.rrt / 2);
 }
 
+// window.amount = 0;
+
+// setInterval(() => {
+// 	console.log('other ticks extrap', amount);
+// 	window.amount = 0;
+// }, 1000)
+
 function otherUpdate() {
 	const expectedTick = Math.ceil((Date.now() - otherStartTime) * (simulation_rate / 1000));
 
-	while (otherTick < expectedTick) {
-		if (otherTick <= otherBufferSize - 1) {
+	/*
+		while (this.counter < expectedTick) {
+			this.counter++;
+			if (this.tick - 1 <= bufferSize - 1) {
+				this.tick++;
+				this.states[this.tick] = copy(this.initState);
+				this.inputs[this.tick] = copy(this.initInput);
+			} else {
+				if (this.inputs[this.tick + 1] === undefined) {
+					this.states[this.tick] = simulate(copy(this.states[this.tick]), copy(this.inputs[this.tick]));
+					this.updated = true;
+					continue;
+				}
+				this.tick++;
+				const oldState = copy(this.states[this.tick - 1]);
+				this.states[this.tick] = simulate(copy(oldState), this.inputs[this.tick]);
+				this.updated = true;
+			}
+		}
+	*/
+	
+	while (otherCounter < expectedTick) {
+		otherCounter++;
+		if (otherTick - 1 <= otherBufferSize - 1) {
 			otherTick++;
 			otherStates[otherTick] = copy(otherStates[otherTick - 1]);
 			otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
 		} else {
 			if (otherInputs[otherTick + 1] === undefined) {
-				// otherInputs[otherTick + 1] = copy(otherInputs[otherTick]);
-				break;
+				const oldState = copy(otherStates[otherTick]);
+				const oldInput = copy(otherInputs[otherTick]);
+				// for (const input of Object.values(oldInput.players)) {
+				// 	input.up *= inputDecay;
+				// 	input.down *= inputDecay;
+				// 	input.left *= inputDecay;
+				// 	input.right *= inputDecay;
+				// }
+				otherStates[otherTick] = simulate(oldState, oldInput);
+				continue;
 			}
 			otherTick++;
 			if (window.tickOffset == null) {
 				otherStates[otherTick] = copy(otherStates[otherTick - 1]);
 				otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
+				console.log('tick offset is null');
 			} else {
 				const oldState = copy(otherStates[otherTick - 1]);
-				if (!otherStates[otherTick]) {
-					otherStates[otherTick] = simulate(copy(oldState), copy(otherInputs[otherTick]));
-				}
+				otherStates[otherTick] = simulate(copy(oldState), copy(otherInputs[otherTick]));
 			}
 		}
 	}
@@ -386,6 +419,13 @@ function trackKeys(event) {
 	if (control.movement) {
 		currentInput[control.name] = event.type === 'keydown';
 	}
+	if (control.lag && event.type === 'keydown') {
+		if (control.name === 'up') {
+			jitter *= 1.5;
+		} else {
+			jitter /= 1.5;
+		}
+	}
 }
 
 function copy(obj) {
@@ -397,7 +437,7 @@ function copy(obj) {
 }
 
 
-function isSameStates(state1, state2) {
+window.isSameStates = function(state1, state2) {
 	if (JSON.stringify(state1) !== JSON.stringify(state2)) {
 		for (const key of Object.keys(state1.players)) {
 			const player1 = state1.players[key];
