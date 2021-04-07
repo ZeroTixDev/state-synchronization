@@ -14,19 +14,21 @@ window.clientReceiveLocal = function (pack) {
 	const serverInput = pack.input;
 	const serverTick = pack.tick + tickOffset + localBuffer;
 
-	const myState = copy(states[serverTick]);
+	if (states[serverTick]) {
+		const myState = copy(states[serverTick]);
 
-	if (!isSameStates(serverState, myState)) {
+		if (!isSameStates(serverState, myState)) {
 
-		// console.log('correction happened', serverTick, tick, 'compare', serverState, roundedState);
-		states[serverTick] = copy(serverState);
-		states[serverTick].ball = copy(serverState.ball);
-		inputs[serverTick] = copy(serverInput);
-		let currentTick = serverTick;
-		while (currentTick < tick) {
-			currentTick++;
-			states[currentTick] = simulate(copy(states[currentTick - 1]),
-				inputs[currentTick]);
+			// console.log('correction happened', serverTick, tick, 'compare', serverState, roundedState);
+			states[serverTick] = copy(serverState);
+			states[serverTick].ball = copy(serverState.ball);
+			inputs[serverTick] = copy(serverInput);
+			let currentTick = serverTick;
+			while (currentTick < tick) {
+				currentTick++;
+				states[currentTick] = simulate(copy(states[currentTick - 1]),
+					inputs[currentTick]);
+			}
 		}
 	}
 }
@@ -37,6 +39,7 @@ window.otherReceive = function (pack) {
 	let stateExists = true;
 	if (otherStates[serverTick] === undefined) {
 		otherStates[serverTick] = serverState;
+		otherRefStates[serverTick] = serverState;
 		otherInputs[serverTick] = serverInput;
 		return;
 	}
@@ -44,27 +47,32 @@ window.otherReceive = function (pack) {
 	if (!stateExists) {
 		correction = true;
 	}
-	if (stateExists  && !isSameStates(serverState, otherStates[serverTick])) {
+	if (stateExists  && !isSameStates(serverState, otherRefStates[serverTick])) {
 		correction = true;
 	}
 
 	if (correction) {
 		otherStates[serverTick] = copy(serverState);
-		otherStates[serverTick].ball = copy(serverState.ball);
+		otherRefStates[serverTick] = copy(serverState);
 		otherInputs[serverTick] = copy(serverInput);
 		console.log('corrected other', serverTick, otherTick);
 		let currentTick = serverTick;
 		while (currentTick < otherTick) {
 			if (otherInputs[currentTick + 1] === undefined) {
-				// otherInputs[currentTick + 1] = copy(otherInputs[currentTick]);
-				// const oldState = copy(otherStates[currentTick]);
-				// const oldInput = copy(otherInputs[currentTick]);
-				// otherStates[currentTick] = simulate(oldState, oldInput);
-				// continue;
-				break;
+				const oldState = copy(otherStates[otherTick]);
+				const oldInput = copy(otherInputs[otherTick]);
+				// for (const input of Object.values(oldInput.players)) {
+				// 	input.up *= inputDecay;
+				// 	input.down *= inputDecay;
+				// 	input.left *= inputDecay;
+				// 	input.right *= inputDecay;
+				// }
+				otherStates[otherTick] = simulate(oldState, oldInput);
+				continue;
 			}
 			currentTick++;
-			otherStates[currentTick] = simulate(copy(otherStates[currentTick - 1]), otherInputs[currentTick]);
+			otherStates[currentTick] = simulate(copy(otherRefStates[currentTick - 1]), otherInputs[currentTick]);
+			otherRefStates[currentTick] = copy(otherStates[currentTick]);
 		}
 	}
 
@@ -185,13 +193,14 @@ const controls = {
 let server = null;
 setTimeout(() => {
 	server = new Server(copy(initialState), copy(initialInputs));
-}, 500);
+}, 50);
 
 window.states = { 0: { ...copy(initialState) } }; //
 window.inputs = { 0: { ...copy(initialInputs) } };
 window.tick = 0;
 
 window.otherStates = { 0: { ...copy(initialState) } }; //
+window.otherRefStates = { 0: {...copy(initialState)} };
 window.otherInputs = { 0: { ...copy(initialInputs) } };
 window.otherTick = 0;
 window.otherCounter = 0;
@@ -306,6 +315,7 @@ function otherUpdate() {
 			otherTick++;
 			otherStates[otherTick] = copy(otherStates[otherTick - 1]);
 			otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
+			otherRefStates[otherTick] = copy(otherStates[otherTick - 1]);
 		} else {
 			if (otherInputs[otherTick + 1] === undefined) {
 				const oldState = copy(otherStates[otherTick]);
@@ -323,10 +333,12 @@ function otherUpdate() {
 			if (window.tickOffset == null) {
 				otherStates[otherTick] = copy(otherStates[otherTick - 1]);
 				otherInputs[otherTick] = copy(otherInputs[otherTick - 1]);
+				otherRefStates[otherTick] = copy(otherRefStates[otherTick - 1]);
 				console.log('tick offset is null');
 			} else {
-				const oldState = copy(otherStates[otherTick - 1]);
+				const oldState = copy(otherRefStates[otherTick - 1]);
 				otherStates[otherTick] = simulate(copy(oldState), copy(otherInputs[otherTick]));
+				otherRefStates[otherTick] = copy(otherStates[otherTick]);
 			}
 		}
 	}

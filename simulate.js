@@ -1,6 +1,6 @@
 const accel = 1000;
-const friction = 0.76
-const knock = 100;
+const friction = 0.8;
+const knock = 200;
 window.ballRadius = 30;
 window.radius = 20;
 
@@ -27,8 +27,8 @@ export default function simulate(oldState, inputs) {
 				}
 			}
 		}
-		player.xv *= Math.pow(friction, delta * 15);
-		player.yv *= Math.pow(friction, delta * 15);
+		player.xv *= Math.pow(friction, delta * 10);
+		player.yv *= Math.pow(friction, delta * 10);
 		player.x += player.xv * delta;
 		player.y += player.yv * delta;
 		if (player.x + radius > state.bound.width + state.bound.x) {
@@ -54,19 +54,22 @@ export default function simulate(oldState, inputs) {
 			const magnitude = Math.sqrt(distX * distX + distY * distY) || 1;
 			const xv = distX / magnitude;
 			const yv = distY / magnitude;
-			player.xv += xv * knock * 0.5;
-			player.yv += yv * knock * 0.5;
-			state.ball.xv += -xv * knock * 1.2;
-			state.ball.yv += -yv * knock * 1.2;
+			player.x = state.ball.x + (ballRadius + 0.05 + radius) * xv;
+            player.y = state.ball.y + (ballRadius + 0.05 + radius) * yv;
+			player.xv += xv * knock * 0.3;
+			player.yv += yv * knock * 0.3;
+			state.ball.xv += -xv * knock * 1.5;
+			state.ball.yv += -yv * knock * 1.5;
 		}
+		
 	}
 	// ball update
 	// state.ball.xv += Math.random() * 4 - 2;
 	// state.ball.yv += Math.random() * 4 - 2;
 	state.ball.x += state.ball.xv * delta;
 	state.ball.y += state.ball.yv * delta;
-	state.ball.xv *= Math.pow(friction, delta * 10);
-	state.ball.yv *= Math.pow(friction, delta * 10);
+	state.ball.xv *= Math.pow(friction, delta * 5);
+	state.ball.yv *= Math.pow(friction, delta * 5);
 	if (state.ball.x + ballRadius > state.bound.width + state.bound.x) {
 		state.ball.x = state.bound.width + state.bound.x - ballRadius;
 		state.ball.xv *= -1;

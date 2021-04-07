@@ -19,21 +19,23 @@ export default class Server {
 		this.refStates[this.tick] = copy(this.initState);
 		this.updated = false;
 		this.inputPackages = [];
-		let now = new Date();
-		this.time = Date.UTC(now.getFullYear(),
-			now.getMonth(), 
-			(new Date()).getDate(), 
-			(new Date()).getHours(), 
-			now.getMinutes(), 
-			now.getSeconds(), 
-			now.getMilliseconds()
-		);
-		console.log(this.startTime);
+		// let now = new Date();
+		// this.time = Date.UTC(now.getFullYear(),
+		// 	now.getMonth(), 
+		// 	(new Date()).getDate(), 
+		// 	(new Date()).getHours(), 
+		// 	now.getMinutes(), 
+		// 	now.getSeconds(), 
+		// 	now.getMilliseconds()
+		// );
+		// console.log(this.startTime);
 		this.startSending();
 		this.pingClients();
 	}
 	pingClients() {
-		window.ping = true;
+		setTimeout(() => {
+			window.ping = true;
+		}, 50);
 	}
 	receiveInputs(packages) {
 		setTimeout(() => {
