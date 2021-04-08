@@ -234,6 +234,10 @@ function update() {
 		window.rrt = Math.max(window.rrt, window.minRrt);
 		window.rrt = Math.min(window.rrt, window.minRrt + window.jitter);
 	}
+	const expectedTick = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
+	if (expectedTick - tick > simulation_rate * 2) {
+		alert('Cannot simulate the game ticks. refresh')
+	}
 	localUpdate();
 	if (canOtherUpdate) {
 		otherUpdate();
