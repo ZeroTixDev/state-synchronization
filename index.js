@@ -1,11 +1,17 @@
 window.simulation_rate = 120;
-window.minRrt = 25;
-window.jitter = 100;
+window.minRrt = 50;
+window.otherMinRrt = 100;
+window.otherJitter = 20;
+window.jitter = 300;
 window.otherBufferSize = 0;
 window.localBuffer = 0;
 window.tickOffset = null;
 window.canOtherUpdate = false;
 window.otherStartTime = null;
+
+let countdown = 3;
+let runningCountdown = false;
+let gotPing = false;
 
 window.inputDecay = 1;
 
@@ -190,7 +196,7 @@ const controls = {
 }
 
 
-let server = null;
+window.server = null;
 setTimeout(() => {
 	server = new Server(copy(initialState), copy(initialInputs));
 }, 50);
@@ -202,6 +208,7 @@ window.tick = 0;
 window.otherStates = { 0: { ...copy(initialState) } }; //
 window.otherRefStates = { 0: {...copy(initialState)} };
 window.otherInputs = { 0: { ...copy(initialInputs) } };
+window.otherExtrapTicks = {};
 window.otherTick = 0;
 window.otherCounter = 0;
 
@@ -216,6 +223,8 @@ const ctx = {
 	other: canvas.other.getContext('2d')
 };
 
+let lastTime = 0;
+
 resize();
 window.onresize = resize;
 
@@ -226,16 +235,30 @@ window.onresize = resize;
 })();
 
 function update() {
-	if (Math.random() < 0.1) {
+	const delta = (window.performance.now() - lastTime) / 1000;
+	lastTime = window.performance.now();
+	if (runningCountdown) {
+		countdown -= delta;
+		if (countdown <= 0) {
+			runningCountdown = false;
+		}
+	}
+	if (Math.random() < 0.07) {
 		if (!window.rrt) {
 			window.rrt = window.minRrt + window.jitter / 2;
 		}
 		window.rrt += (Math.random() * (window.jitter * 2) - window.jitter) * 0.4;
 		window.rrt = Math.max(window.rrt, window.minRrt);
 		window.rrt = Math.min(window.rrt, window.minRrt + window.jitter);
+		if (!window.otherRrt) {
+			window.otherRrt = window.otherMinRrt + window.otherJitter / 2;
+		}
+		window.otherRrt += (Math.random() * (window.otherJitter * 2) - window.otherJitter) * 0.4;
+		window.otherRrt = Math.max(window.otherRrt, window.otherMinRrt);
+		window.otherRrt = Math.min(window.otherRrt, window.otherMinRrt + window.otherJitter);
 	}
 	const expectedTick = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
-	if (expectedTick - tick > simulation_rate * 2) {
+	if (expectedTick - tick > simulation_rate * 15) {
 		alert('Cannot simulate the game ticks. refresh')
 	}
 	localUpdate();
@@ -248,7 +271,9 @@ function update() {
 	if (window.ping) {
 		console.log("pinged client");
 		window.ping = false;
-		window.tickOffset = Math.ceil((Date.now() - startTime) * (simulation_rate / 1000));
+		gotPing = true;
+		runningCountdown = true;
+		window.tickOffset = Math.ceil(((Date.now() + countdown * simulation_rate)  - startTime) * (simulation_rate / 1000));
 	}
 }
 
@@ -265,8 +290,10 @@ function localUpdate() {
 		} else {
 			// inputs[tick + 1] = copy(inputs[tick]);
 			inputs[tick + 1 + localBuffer] = copy(inputs[tick]);
-			inputs[tick + 1 + localBuffer].players[id] = copy(input);
-			inputs[tick + 1 + localBuffer].players[oid] = copy(otherInput);
+			if (!runningCountdown && gotPing) {
+				inputs[tick + 1 + localBuffer].players[id] = copy(input);
+				inputs[tick + 1 + localBuffer].players[oid] = copy(otherInput);
+			}
 			inputPackages.push({ tick: tick - tickOffset + 1, input: copy(inputs[tick + 1 + localBuffer]) });
 			if (inputs[tick + 1] === undefined) {
 				inputs[tick + 1] = copy(inputs[tick]);
@@ -324,6 +351,11 @@ function otherUpdate() {
 			if (otherInputs[otherTick + 1] === undefined) {
 				const oldState = copy(otherStates[otherTick]);
 				const oldInput = copy(otherInputs[otherTick]);
+				if (otherExtrapTicks[otherTick] !== undefined) {
+					otherExtrapTicks[otherTick]++;
+				} else {
+					otherExtrapTicks[otherTick] = 1;
+				}
 				// for (const input of Object.values(oldInput.players)) {
 				// 	input.up *= inputDecay;
 				// 	input.down *= inputDecay;
@@ -342,7 +374,12 @@ function otherUpdate() {
 			} else {
 				const oldState = copy(otherRefStates[otherTick - 1]);
 				otherStates[otherTick] = simulate(copy(oldState), copy(otherInputs[otherTick]));
-				otherRefStates[otherTick] = copy(otherStates[otherTick]);
+				if (otherExtrapTicks[otherTick - 1] !== undefined) {
+					for (let i = 0; i < otherExtrapTicks[otherTick - 1]; i++) {
+						otherStates[otherTick] = simulate(copy(otherStates[otherTick]), copy(otherInputs[otherTick]));
+					}
+				}
+				otherRefStates[otherTick] = copy(simulate(copy(oldState), copy(otherInputs[otherTick])));
 			}
 		}
 	}
@@ -387,8 +424,13 @@ function renderCanvas(canvas, ctx, type) {
 		ctx.arc(states[tick].ball.x, states[tick].ball.y, ballRadius, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.stroke();
+		if (runningCountdown || !gotPing) {
+			ctx.fillStyle = 'black';
+			ctx.font = '50px Arial';
+			ctx.fillText(`${countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+		}
 	} else if (type === 'Server') {
-		if (server) {
+		if (server != null) {
 			ctx.strokeRect(server.states[server.tick].bound.x, server.states[server.tick].bound.y, server.states[server.tick].bound.width, server.states[server.tick].bound.height);
 			ctx.strokeStyle = 'green';
 			for (const i of Object.keys(server.states[server.tick].players)) {
@@ -402,6 +444,11 @@ function renderCanvas(canvas, ctx, type) {
 			ctx.arc(server.states[server.tick].ball.x, server.states[server.tick].ball.y, ballRadius, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.stroke();
+			if (server.runningCountdown || !gotPing) {
+				ctx.fillStyle = 'black';
+				ctx.font = '50px Arial';
+				ctx.fillText(`${server.countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+			}
 		}
 	} else if (type === 'Other') {
 		ctx.strokeRect(otherStates[otherTick].bound.x, otherStates[otherTick].bound.y, otherStates[otherTick].bound.width, otherStates[otherTick].bound.height)
@@ -417,12 +464,17 @@ function renderCanvas(canvas, ctx, type) {
 		ctx.arc(otherStates[otherTick].ball.x, otherStates[otherTick].ball.y, ballRadius, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.stroke();
+		if (runningCountdown || !gotPing) {
+			ctx.fillStyle = 'black';
+			ctx.font = '50px Arial';
+			ctx.fillText(`${countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+		}
 	}
 	ctx.font = '20px Arial';
 	ctx.textAlign = 'center';
 	ctx.fillStyle = 'white';
-	ctx.fillText(type + ` [RRT: ${Math.round(window.rrt)}ms]`, canvas.width / 2, 25);
-	ctx.fillText(`[Jitter: ${window.jitter}ms]`, canvas.width / 2, 55);
+	ctx.fillText(type + ` [RRT: ${type === 'Server' || type === 'Client' ? Math.round(window.rrt): Math.round(window.otherRrt)}ms]`, canvas.width / 2, 25);
+	ctx.fillText(`[Jitter: ${type === 'Server' || type === 'Client' ? Math.round(window.jitter): Math.round(window.otherJitter)}ms]`, canvas.width / 2, 55);
 	if (type === 'Client') {
 		ctx.fillText(`[LocalBuffer: ${Math.round(((1 / simulation_rate) * localBuffer) * 1000)}ms]`, canvas.width / 2, 85);	
 	}

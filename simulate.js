@@ -33,19 +33,19 @@ export default function simulate(oldState, inputs) {
 		player.y += player.yv * delta;
 		if (player.x + radius > state.bound.width + state.bound.x) {
 			player.x = state.bound.width + state.bound.x - radius;
-			player.xv *= -0.9;
+			player.xv *= -1.2;
 		}
 		if (player.x - radius < state.bound.x) {
 			player.x = state.bound.x + radius;
-			player.xv *= -0.9;
+			player.xv *= -1.2;
 		}
 		if (player.y + radius > state.bound.y + state.bound.height) {
 			player.y = state.bound.y + state.bound.height - radius;
-			player.yv *= -0.9;
+			player.yv *= -1.2;
 		}
 		if (player.y - radius < state.bound.y) {
 			player.y = state.bound.y + radius;
-			player.yv *= -0.9;
+			player.yv *= -1.2;
 		}
 		// test for ball collision
 		const distX = player.x - state.ball.x;

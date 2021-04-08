@@ -1,5 +1,7 @@
 import simulate from './simulate.js';
 
+//playing around with extrap ticks
+
 window.bufferSize = 0;
 window.tickRate = 60;
 window.ping = false;
@@ -10,6 +12,7 @@ export default class Server {
 		this.counter = 0;
 		this.states = {};
 		this.inputs = {};
+		this.extrapTicks = {};
 		this.refStates = {};
 		this.startTime = Date.now();
 		this.initState = copy(state);
@@ -19,6 +22,9 @@ export default class Server {
 		this.refStates[this.tick] = copy(this.initState);
 		this.updated = false;
 		this.inputPackages = [];
+		this.countdown = 3;
+		this.runningCountdown = true;
+		this.lastTime = window.performance.now();
 		// let now = new Date();
 		// this.time = Date.UTC(now.getFullYear(),
 		// 	now.getMonth(), 
@@ -35,7 +41,7 @@ export default class Server {
 	pingClients() {
 		setTimeout(() => {
 			window.ping = true;
-		}, 50);
+		}, 500);
 	}
 	receiveInputs(packages) {
 		setTimeout(() => {
@@ -57,7 +63,12 @@ export default class Server {
 						this.tick++;
 						const oldState = copy(this.refStates[this.tick - 1]);
 						this.states[this.tick] = simulate(copy(oldState), this.inputs[this.tick]);
-						this.refStates[this.tick] = copy(this.states[this.tick]);
+						if (this.extrapTicks[this.tick - 1] !== undefined) {
+							for (let i = 0; i < this.extrapTicks[this.tick - 1]; i++) {
+								this.states[this.tick] = simulate(copy(this.states[this.tick]), this.inputs[this.tick]);
+							}
+						}
+						this.refStates[this.tick] = copy(simulate(copy(oldState), this.inputs[this.tick]));
 						this.updated = true;
 					}
 
@@ -94,17 +105,27 @@ export default class Server {
 			}, window.rrt / 2);
 			setTimeout(() => {
 				window.otherReceive(pack);
-			}, window.rrt / 2);
+			}, window.otherRrt / 2);
 		}
 		if (this.inputPackages.length > 0) {
 			setTimeout(() => {
 				window.otherInputReceive(this.inputPackages);
 				this.inputPackages = [];
-			}, window.rrt / 2);
+			}, window.otherRrt / 2);
 		}
 		this.updated = false;
 	}
 	update() {
+		const delta = (window.performance.now() - this.lastTime) / 1000;
+		this.lastTime = window.performance.now();
+
+		if (this.runningCountdown) {
+			this.countdown -= delta;
+			if (this.countdown <= 0) {
+				this.runningCountdown = false;
+			}
+		}
+
 		const expectedTick = Math.ceil((Date.now() - this.startTime) * (simulation_rate / 1000));
 
 		while (this.counter < expectedTick) {
@@ -116,6 +137,11 @@ export default class Server {
 				this.refStates[this.tick] = copy(this.initState);
 			} else {
 				if (this.inputs[this.tick + 1] === undefined) {
+					if (this.extrapTicks[this.tick] !== undefined) {
+						this.extrapTicks[this.tick]++;
+					} else {
+						this.extrapTicks[this.tick] = 1;
+					}
 					this.states[this.tick] = simulate(copy(this.states[this.tick]), copy(this.inputs[this.tick]));
 					this.updated = true;
 					// console.log('server extrap');
@@ -124,7 +150,12 @@ export default class Server {
 				this.tick++;
 				const oldState = copy(this.refStates[this.tick - 1]);
 				this.states[this.tick] = simulate(copy(oldState), this.inputs[this.tick]);
-				this.refStates[this.tick] = copy(this.states[this.tick]);
+				if (this.extrapTicks[this.tick - 1] !== undefined) {
+					for (let i = 0; i < this.extrapTicks[this.tick - 1]; i++) {
+						this.states[this.tick] = simulate(copy(this.states[this.tick]), this.inputs[this.tick]);
+					}
+				}
+				this.refStates[this.tick] = copy(simulate(copy(oldState), this.inputs[this.tick]));
 				this.updated = true;
 			}
 		}
