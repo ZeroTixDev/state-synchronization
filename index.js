@@ -187,12 +187,12 @@ const controls = {
 	KeyA: { movement: true, name: 'left' },
 	KeyS: { movement: true, name: 'down' },
 	KeyD: { movement: true, name: 'right' },
-	KeyI: { otherMovement: true, name: 'up' },
-	KeyJ: { otherMovement: true, name: 'left' },
-	KeyK: { otherMovement: true, name: 'down' },
-	KeyL: { otherMovement: true, name: 'right' },
-	KeyO: { lag: true, name: 'up' },
-	KeyP: { lag: true, name: 'down' }
+	KeyO: { otherMovement: true, name: 'up' },
+	KeyK: { otherMovement: true, name: 'left' },
+	KeyL: { otherMovement: true, name: 'down' },
+	Semicolon: { otherMovement: true, name: 'right' },
+	KeyI: { lag: true, name: 'up' },
+	KeyU: { lag: true, name: 'down' }
 }
 
 
@@ -273,6 +273,7 @@ function update() {
 		window.ping = false;
 		gotPing = true;
 		runningCountdown = true;
+		countdown -= (Date.now() - server.startTime) / 1000;
 		window.tickOffset = Math.ceil(((Date.now() + countdown * simulation_rate)  - startTime) * (simulation_rate / 1000));
 	}
 }
@@ -427,7 +428,7 @@ function renderCanvas(canvas, ctx, type) {
 		if (runningCountdown || !gotPing) {
 			ctx.fillStyle = 'black';
 			ctx.font = '50px Arial';
-			ctx.fillText(`${countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+			ctx.fillText(`${countdown.toFixed(0)}`, window.innerWidth / 6, window.innerHeight / 2);
 		}
 	} else if (type === 'Server') {
 		if (server != null) {
@@ -447,7 +448,7 @@ function renderCanvas(canvas, ctx, type) {
 			if (server.runningCountdown || !gotPing) {
 				ctx.fillStyle = 'black';
 				ctx.font = '50px Arial';
-				ctx.fillText(`${server.countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+				ctx.fillText(`${server.countdown.toFixed(0)}`, window.innerWidth / 6, window.innerHeight / 2);
 			}
 		}
 	} else if (type === 'Other') {
@@ -467,7 +468,7 @@ function renderCanvas(canvas, ctx, type) {
 		if (runningCountdown || !gotPing) {
 			ctx.fillStyle = 'black';
 			ctx.font = '50px Arial';
-			ctx.fillText(`${countdown.toFixed(1)}`, window.innerWidth / 6, window.innerHeight / 2);
+			ctx.fillText(`${countdown.toFixed(0)}`, window.innerWidth / 6, window.innerHeight / 2);
 		}
 	}
 	ctx.font = '20px Arial';
